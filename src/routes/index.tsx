@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -180,8 +180,8 @@ function Index() {
             {demo !== null && (
               <div className="mt-3 rounded-lg border border-primary/40 bg-primary/10 p-4">
                 <p className="text-xs font-semibold uppercase tracking-widest text-primary">Demo Mode · Stage {demo + 1} of 5</p>
-                <p className="mt-1 font-display text-lg font-semibold">{STAGES[demo][0]}</p>
-                <p className="mt-1 text-sm text-muted-foreground">{STAGES[demo][1]}</p>
+                <p className="mt-1 font-display text-lg font-semibold">{STAGES[demo]?.[0]}</p>
+                <p className="mt-1 text-sm text-muted-foreground">{STAGES[demo]?.[1]}</p>
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   <button onClick={() => setDemo(Math.max(0, demo - 1))} disabled={demo === 0} className="rounded-md bg-secondary px-3 py-1.5 text-sm font-semibold disabled:opacity-40">← Previous</button>
                   <button onClick={() => setDemo(Math.min(4, demo + 1))} disabled={demo === 4} className="rounded-md bg-brand px-3 py-1.5 text-sm font-semibold text-primary-foreground disabled:opacity-40">Next →</button>
@@ -369,7 +369,7 @@ const STAGES: [string, string][] = [
   ["Oxygen transfer may occur", "At the air–water interface of each bubble, some oxygen may dissolve as the aerated water returns to the tank."],
 ];
 
-function Term({ tip, children }: { tip: string; children: React.ReactNode }) {
+function Term({ tip, children }: { tip: string; children: ReactNode }) {
   return (
     <span className="group relative cursor-help border-b border-dotted border-primary text-foreground" tabIndex={0}>
       {children}

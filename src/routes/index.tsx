@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -37,24 +37,24 @@ function Index() {
   const [started, setStarted] = useState(false);
   const [doVal, setDoVal] = useState(INIT.doVal);
   const [elapsed, setElapsed] = useState(0);
+  const [history, setHistory] = useState<number[]>([INIT.doVal]);
+  const [demo, setDemo] = useState<number | null>(null);
 
   const suction = suctionFactor(flow, mode);
   const airDrawn = Math.round(suction * air); // actual air entering, limited by suction
   const lowFlow = flow < (mode === "pump" ? MIN_FLOW_PUMP : MIN_FLOW_NATURAL) || suction === 0;
 
-  const ref = useRef({ suction, air });
-  ref.current = { suction, air };
+  const ref = useRef({ suction, air, doVal });
+  ref.current = { suction, air, doVal };
 
   useEffect(() => {
     if (!running) return;
     const id = setInterval(() => {
-      const { suction: s, air: a } = ref.current;
-      setDoVal((d) => {
-        const rate = s * (a / 100) * 0.08; // illustrative gain
-        const decay = 0.01; // illustrative oxygen demand
-        const next = d + rate * (DO_MAX - d) / DO_MAX * 3 - decay;
-        return Math.max(0, Math.min(DO_MAX, next));
-      });
+      const { suction: s, air: a, doVal: d } = ref.current;
+      const next = Math.max(0, Math.min(DO_MAX, d + 0.24 * s * (a / 100) * (1 - d / DO_MAX) - 0.01));
+      ref.current.doVal = next;
+      setDoVal(next);
+      setHistory((h) => [...h, next].slice(-120));
       setElapsed((e) => e + 0.5);
     }, 500);
     return () => clearInterval(id);
@@ -63,7 +63,7 @@ function Index() {
   const reset = () => {
     setRunning(false); setStarted(false);
     setFlow(INIT.flow); setAir(INIT.air); setMode(INIT.mode);
-    setDoVal(INIT.doVal); setElapsed(0);
+    setDoVal(INIT.doVal); setElapsed(0); setHistory([INIT.doVal]); setDemo(null);
   };
 
   const status = !started
@@ -113,13 +113,29 @@ function Index() {
         </section>
 
         <div className="rounded-lg border border-warning/40 bg-warning/10 px-4 py-2 text-center text-xs font-semibold tracking-wide text-warning">
-          ALL VALUES ON THIS PAGE ARE SIMULATED — NOT REAL SENSOR DATA
+          SIMULATION — NOT REAL SENSOR DATA
         </div>
 
-        <section className="grid gap-4 sm:grid-cols-3">
-          <Stat label="Water flow" value={`${flow}%`} sub={mode === "pump" ? "Pump-assisted" : "Natural flow"} pct={flow} bar="bg-water" />
-          <Stat label="Air drawn in" value={`${airDrawn}%`} sub={`Setting ${air}% · suction ${Math.round(suction * 100)}%`} pct={airDrawn} bar="bg-primary" />
-          <Stat label="Dissolved oxygen" value={`${doVal.toFixed(2)} mg/L`} sub={`Illustrative · t = ${elapsed.toFixed(0)}s`} pct={(doVal / DO_MAX) * 100} bar="bg-success" />
+        <div className="flex flex-wrap gap-2">
+          <button onClick={() => { reset(); setDemo(0); }} className="rounded-md bg-brand px-4 py-2 text-sm font-semibold text-primary-foreground">▶ Start Demo Mode</button>
+          <button onClick={() => { reset(); setDemo(0); setRunning(true); setStarted(true); }} className="rounded-md border px-4 py-2 text-sm font-semibold">↻ Restart Demonstration</button>
+        </div>
+
+        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <Stat label="Water flow setting" value={`${flow}%`} sub={mode === "pump" ? "Pump-assisted" : "Natural flow"} pct={flow} bar="bg-water" />
+          <Stat label="Air intake setting" value={`${air}%`} sub={`Actually drawn in: ${airDrawn}% · suction ${Math.round(suction * 100)}%`} pct={air} bar="bg-primary" />
+          <Stat label="Estimated DO" value={`${doVal.toFixed(2)} mg/L`} sub={`Illustrative · t = ${elapsed.toFixed(0)}s`} pct={(doVal / DO_MAX) * 100} bar="bg-success" />
+          <div className="panel p-5">
+            <div className="flex items-center justify-between">
+              <p className="text-xs uppercase tracking-widest text-muted-foreground">System status</p>
+              <span className="rounded bg-warning/15 px-1.5 py-0.5 text-[10px] font-bold text-warning">SIMULATED</span>
+            </div>
+            <div className="mt-3 flex items-center gap-2">
+              <span className={`h-3 w-3 rounded-full ${toneCls[status.tone]} ${running ? "animate-pulse" : ""}`} />
+              <p className="font-display text-lg font-bold">{status.label}</p>
+            </div>
+            <p className="mt-3 text-xs text-muted-foreground">{lowFlow ? "Suction may be inadequate at this flow." : "Flow sufficient for illustrative suction."}</p>
+          </div>
         </section>
 
         <div className="grid gap-6 lg:grid-cols-[340px_1fr]">
@@ -160,12 +176,51 @@ function Index() {
               <h2 className="font-semibold">Venturi aeration diagram</h2>
               <span className="text-xs text-muted-foreground">{running ? "Animating" : started ? "Paused" : "Press Start"}</span>
             </div>
-            <Diagram running={running} started={started} flow={flow} airDrawn={airDrawn} mode={mode} />
+            <Diagram running={running} started={started} flow={flow} airDrawn={airDrawn} mode={mode} stage={demo} />
+            {demo !== null && (
+              <div className="mt-3 rounded-lg border border-primary/40 bg-primary/10 p-4">
+                <p className="text-xs font-semibold uppercase tracking-widest text-primary">Demo Mode · Stage {demo + 1} of 5</p>
+                <p className="mt-1 font-display text-lg font-semibold">{STAGES[demo]?.[0]}</p>
+                <p className="mt-1 text-sm text-muted-foreground">{STAGES[demo]?.[1]}</p>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <button onClick={() => setDemo(Math.max(0, demo - 1))} disabled={demo === 0} className="rounded-md bg-secondary px-3 py-1.5 text-sm font-semibold disabled:opacity-40">← Previous</button>
+                  <button onClick={() => setDemo(Math.min(4, demo + 1))} disabled={demo === 4} className="rounded-md bg-brand px-3 py-1.5 text-sm font-semibold text-primary-foreground disabled:opacity-40">Next →</button>
+                  <div className="flex gap-1">
+                    {STAGES.map((_, i) => (
+                      <button key={i} aria-label={`Go to stage ${i + 1}`} onClick={() => setDemo(i)} className={`h-2.5 w-6 rounded-full ${i === demo ? "bg-primary" : "bg-muted"}`} />
+                    ))}
+                  </div>
+                  <button onClick={() => setDemo(null)} className="ml-auto text-xs text-muted-foreground underline">Exit demo</button>
+                </div>
+              </div>
+            )}
             <p className="mt-3 text-xs text-muted-foreground">
-              Faster water through the narrow throat can reduce local static pressure (Bernoulli principle). When that pressure falls below atmospheric pressure, air can be drawn in through the inlet and sheared into bubbles in the mixing zone.
+              Faster water through the narrow throat can reduce local static pressure (<Term tip="Along a streamline, when fluid speeds up, its static pressure tends to fall.">Bernoulli principle</Term>). When that pressure falls below atmospheric pressure, air can be drawn in through the inlet and sheared into bubbles in the mixing zone.
             </p>
           </section>
         </div>
+
+        <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
+          <section className="panel p-5">
+            <div className="flex items-center justify-between">
+              <h2 className="font-semibold">Dissolved-oxygen trend</h2>
+              <span className="rounded bg-warning/15 px-1.5 py-0.5 text-[10px] font-bold text-warning">SIMULATED</span>
+            </div>
+            <Chart data={history} />
+            <p className="mt-1 text-xs text-muted-foreground">Illustrative demonstration model, not a validated prediction. Updates every 0.5 s while running.</p>
+          </section>
+          <section className="panel space-y-3 p-5 text-sm">
+            <h2 className="font-semibold">Bernoulli &amp; the Venturi effect</h2>
+            <p className="text-muted-foreground">In a pipe, the same volume of water must pass every point each second. Where the pipe narrows (the <Term tip="The narrowest section of the Venturi, where velocity is highest.">throat</Term>), water must move faster.</p>
+            <p className="text-muted-foreground">Bernoulli's principle says faster flow tends to mean lower <Term tip="Pressure exerted by the fluid itself, independent of its motion.">static pressure</Term>. If throat pressure drops below atmospheric pressure, air can be sucked in — this is <Term tip="Air being drawn into and carried along by the moving water.">air entrainment</Term>.</p>
+            <p className="rounded-md bg-muted p-2 text-xs text-muted-foreground">Actual entrainment depends on inlet pressure, throat geometry, flow rate, back-pressure and operating conditions. This model only illustrates the trend.</p>
+          </section>
+        </div>
+
+        <section className="panel p-5 text-xs text-muted-foreground">
+          <h2 className="mb-2 text-sm font-semibold text-foreground">Demonstration model (transparent)</h2>
+          <p>Suction (0–1) = 0 below a flow threshold (35% natural, 20% pump-assisted; pump adds +25% effective flow), then rises linearly to 1 at 100%. Air drawn = suction × air-intake setting. Each 0.5 s: DO += 0.24 × suction × (air/100) × (1 − DO/9) − 0.01. DO starts at 3.0 mg/L and is capped at 9 mg/L. All constants are chosen for illustration only.</p>
+        </section>
 
         <section className="panel p-6">
           <h2 className="text-lg font-semibold">How it works</h2>
@@ -237,7 +292,15 @@ function Slider({ label, value, onChange }: { label: string; value: number; onCh
   );
 }
 
-function Diagram({ running, started, flow, airDrawn, mode }: { running: boolean; started: boolean; flow: number; airDrawn: number; mode: Mode }) {
+const STAGE_BOXES = [
+  { x: 150, y: 195, width: 185, height: 70 },
+  { x: 330, y: 195, width: 115, height: 70 },
+  { x: 395, y: 80, width: 50, height: 160 },
+  { x: 440, y: 185, width: 165, height: 80 },
+  { x: 15, y: 140, width: 150, height: 155 },
+];
+
+function Diagram({ running, started, flow, airDrawn, mode, stage }: { running: boolean; started: boolean; flow: number; airDrawn: number; mode: Mode; stage: number | null }) {
   const active = started;
   const speed = flow > 0 ? Math.max(0.3, 3 - flow / 40) : 0;
   const bubbleCount = active ? Math.round(airDrawn / 8) : 0;
@@ -273,7 +336,7 @@ function Diagram({ running, started, flow, airDrawn, mode }: { running: boolean;
         {/* Outlet + return */}
         <path d="M600 230 H700 V100 H90 V150" stroke="var(--pipe)" strokeWidth="14" fill="none" />
         <text x="700" y="250" textAnchor="middle" className={label}>Aerated Outlet</text>
-        <text x="400" y="88" textAnchor="middle" className={label}>Return to Tank ←</text>
+        <text x="250" y="88" textAnchor="middle" className={label}>← Return to Tank</text>
 
         {/* Flow lines */}
         <path d="M160 230 H700 V100 H90 V150" stroke="var(--water)" strokeWidth="4" fill="none" className="flow-line" style={flowStyle} />
@@ -290,7 +353,51 @@ function Diagram({ running, started, flow, airDrawn, mode }: { running: boolean;
         {active && airDrawn === 0 && flow >= 0 && (
           <text x="420" y="160" textAnchor="middle" className="fill-[var(--destructive)] text-[12px] font-semibold">No air suction</text>
         )}
+        {stage !== null && (
+          <rect {...STAGE_BOXES[stage]} rx="10" fill="var(--primary)" fillOpacity="0.12" stroke="var(--primary)" strokeWidth="2" strokeDasharray="6 4" className="transition-all duration-500" />
+        )}
       </svg>
     </div>
+  );
+}
+
+const STAGES: [string, string][] = [
+  ["Water enters the pipe", "Water from the tank (driven by natural flow or the pump) enters the wide inlet section of the Venturi."],
+  ["Water accelerates through the throat", "The pipe narrows, so the same volume of water must move faster through the throat."],
+  ["Lower local pressure can draw in air", "Higher velocity can lower local static pressure. If it falls below atmospheric pressure, air may be pulled through the side inlet."],
+  ["Air bubbles mix with the water", "Incoming air is sheared into bubbles in the diverging mixing zone and carried downstream."],
+  ["Oxygen transfer may occur", "At the air–water interface of each bubble, some oxygen may dissolve as the aerated water returns to the tank."],
+];
+
+function Term({ tip, children }: { tip: string; children: ReactNode }) {
+  return (
+    <span className="group relative cursor-help border-b border-dotted border-primary text-foreground" tabIndex={0}>
+      {children}
+      <span role="tooltip" className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-2 w-56 -translate-x-1/2 rounded-md border bg-popover p-2 text-xs text-popover-foreground opacity-0 shadow-lg transition-opacity group-hover:opacity-100 group-focus:opacity-100">
+        {tip}
+      </span>
+    </span>
+  );
+}
+
+function Chart({ data }: { data: number[] }) {
+  const W = 600, H = 200, P = 30;
+  const n = Math.max(2, data.length);
+  const pts = data.map((v, i) => `${P + (i / (n - 1)) * (W - P - 10)},${H - P - (v / DO_MAX) * (H - P - 10)}`).join(" ");
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="mt-3 w-full" role="img" aria-label="Simulated dissolved oxygen trend">
+      {[0, 3, 6, 9].map((y) => {
+        const yy = H - P - (y / DO_MAX) * (H - P - 10);
+        return (
+          <g key={y}>
+            <line x1={P} x2={W - 10} y1={yy} y2={yy} stroke="var(--border)" />
+            <text x={P - 6} y={yy + 4} textAnchor="end" className="fill-[var(--muted-foreground)] text-[10px]">{y}</text>
+          </g>
+        );
+      })}
+      <text x={W - 10} y={H - 8} textAnchor="end" className="fill-[var(--muted-foreground)] text-[10px]">time → (last 60 s)</text>
+      <text x={P} y={10} className="fill-[var(--muted-foreground)] text-[10px]">mg/L (simulated)</text>
+      {data.length > 1 && <polyline points={pts} fill="none" stroke="var(--success)" strokeWidth="2.5" strokeLinejoin="round" />}
+    </svg>
   );
 }

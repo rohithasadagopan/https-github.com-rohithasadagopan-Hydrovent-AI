@@ -360,3 +360,44 @@ function Diagram({ running, started, flow, airDrawn, mode, stage }: { running: b
     </div>
   );
 }
+
+const STAGES: [string, string][] = [
+  ["Water enters the pipe", "Water from the tank (driven by natural flow or the pump) enters the wide inlet section of the Venturi."],
+  ["Water accelerates through the throat", "The pipe narrows, so the same volume of water must move faster through the throat."],
+  ["Lower local pressure can draw in air", "Higher velocity can lower local static pressure. If it falls below atmospheric pressure, air may be pulled through the side inlet."],
+  ["Air bubbles mix with the water", "Incoming air is sheared into bubbles in the diverging mixing zone and carried downstream."],
+  ["Oxygen transfer may occur", "At the air–water interface of each bubble, some oxygen may dissolve as the aerated water returns to the tank."],
+];
+
+function Term({ tip, children }: { tip: string; children: React.ReactNode }) {
+  return (
+    <span className="group relative cursor-help border-b border-dotted border-primary text-foreground" tabIndex={0}>
+      {children}
+      <span role="tooltip" className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-2 w-56 -translate-x-1/2 rounded-md border bg-popover p-2 text-xs text-popover-foreground opacity-0 shadow-lg transition-opacity group-hover:opacity-100 group-focus:opacity-100">
+        {tip}
+      </span>
+    </span>
+  );
+}
+
+function Chart({ data }: { data: number[] }) {
+  const W = 600, H = 200, P = 30;
+  const n = Math.max(2, data.length);
+  const pts = data.map((v, i) => `${P + (i / (n - 1)) * (W - P - 10)},${H - P - (v / DO_MAX) * (H - P - 10)}`).join(" ");
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="mt-3 w-full" role="img" aria-label="Simulated dissolved oxygen trend">
+      {[0, 3, 6, 9].map((y) => {
+        const yy = H - P - (y / DO_MAX) * (H - P - 10);
+        return (
+          <g key={y}>
+            <line x1={P} x2={W - 10} y1={yy} y2={yy} stroke="var(--border)" />
+            <text x={P - 6} y={yy + 4} textAnchor="end" className="fill-[var(--muted-foreground)] text-[10px]">{y}</text>
+          </g>
+        );
+      })}
+      <text x={W - 10} y={H - 8} textAnchor="end" className="fill-[var(--muted-foreground)] text-[10px]">time → (last 60 s)</text>
+      <text x={P} y={10} className="fill-[var(--muted-foreground)] text-[10px]">mg/L (simulated)</text>
+      {data.length > 1 && <polyline points={pts} fill="none" stroke="var(--success)" strokeWidth="2.5" strokeLinejoin="round" />}
+    </svg>
+  );
+}

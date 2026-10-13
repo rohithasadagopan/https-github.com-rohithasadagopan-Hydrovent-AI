@@ -336,7 +336,7 @@ function Diagram({ running, started, flow, airDrawn, mode, stage }: { running: b
         {/* Outlet + return */}
         <path d="M600 230 H700 V100 H90 V150" stroke="var(--pipe)" strokeWidth="14" fill="none" />
         <text x="700" y="250" textAnchor="middle" className={label}>Aerated Outlet</text>
-        <text x="400" y="88" textAnchor="middle" className={label}>Return to Tank ←</text>
+        <text x="250" y="88" textAnchor="middle" className={label}>← Return to Tank</text>
 
         {/* Flow lines */}
         <path d="M160 230 H700 V100 H90 V150" stroke="var(--water)" strokeWidth="4" fill="none" className="flow-line" style={flowStyle} />
